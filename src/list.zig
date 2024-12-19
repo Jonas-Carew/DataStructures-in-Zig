@@ -36,7 +36,7 @@ pub fn List(comptime T: type) type {
             };
         }
 
-        pub fn insert(self: *Self, value: T) !void {
+        pub fn push(self: *Self, value: T) !void {
             var node = try self.allocator.create(Node);
 
             const head = self.private.head;
@@ -72,7 +72,7 @@ test "List" {
     var list = List(u32).create(allocator);
     try testing.expect(list.private.head == null);
 
-    try list.insert(1);
+    try list.push(1);
     try testing.expect(list.private.head != null);
     try testing.expect(list.private.head.?.value == 1);
 
