@@ -83,16 +83,8 @@ pub fn List(comptime T: type) type {
 }
 
 test "List" {
-    const mhead = struct {
-        fn mhead(message: []const u8) void {
-            print("\n{s}...\n", .{message});
-        }
-    }.mhead;
-    const mtest = struct {
-        fn mtest(message: []const u8) void {
-            print("\t...{s}\n", .{message});
-        }
-    }.mtest;
+    const mhead = @import("test.zig").mhead;
+    const mtest = @import("test.zig").mtest;
 
     // init the Arena Allocator and GPA
     var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
