@@ -63,18 +63,37 @@ pub fn List(comptime T: type) type {
         pub fn position(self: Self, value: T, cmp: *const fn (a: T, b: T) bool) ?u32 {
             var node: ?*Node = self.private.head;
             var i: u32 = 0;
-            while (node != null) : ({
-                node = node.?.next;
-                i += 1;
-            }) {
-                if (cmp(node.?.value, value)) return i;
+            while (node) |current| : (i += 1) {
+                if (cmp(current.value, value)) return i;
+                node = current.next;
             }
             return null;
+        }
+
+        // clear list
+        pub fn free(self: *Self) void {
+            var node: ?*Node = self.private.head;
+            while (node) |current| {
+                const next = current.next;
+                self.allocator.destroy(current);
+                node = next;
+            }
         }
     };
 }
 
 test "List" {
+    const mhead = struct {
+        fn mhead(message: []const u8) void {
+            print("\n{s}...\n", .{message});
+        }
+    }.mhead;
+    const mtest = struct {
+        fn mtest(message: []const u8) void {
+            print("\t...{s}\n", .{message});
+        }
+    }.mtest;
+
     // init the Arena Allocator and GPA
     var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
     defer arena.deinit();
@@ -82,43 +101,44 @@ test "List" {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer {
         const deinit_status = gpa.deinit();
-        if (deinit_status == .leak) testing.expect(false) catch @panic("TEST FAIL");
+        if (deinit_status == .leak) testing.expect(false) catch @panic("MEMORY LEAK");
     }
 
     // Set the used allocator
-    const allocator = arena.allocator();
+    const allocator = gpa.allocator();
 
     // Test Creating a List
-    print("\nCreating a List of i32...\n", .{});
+    mhead("Creating a List");
     var list = List(i32).create(allocator);
-    print("\t...List created successfully\n", .{});
 
     try testing.expect(list.private.head == null);
-    print("\t...List head is null\n", .{});
+    mtest("List head is null");
 
     // Test pushing to a List
-    print("\nPushing values to List...\n", .{});
+    mhead("Pushing values to List");
     const values = [_]i32{ 1, 3, 2 };
+
     for (values) |n| {
         try list.push(n);
     }
+    mtest("Values pushed to List");
 
     try testing.expect(list.private.head != null);
-    print("\t...List head is not null\n", .{});
+    mtest("List head is not null");
 
     try testing.expect(list.private.head.?.value == 2);
-    print("\t...List head value is 2\n", .{});
+    mtest("List head value is 2");
 
     // Test popping from a List
-    print("\nPopping first value from List...\n", .{});
+    mhead("Popping first value from List");
     const pop: i32 = try list.pop();
-    print("\t...First value popped\n", .{});
+    mtest("First value popped");
 
     try testing.expect(pop == 2);
-    print("\t...Value popped is 2\n", .{});
+    mtest("Value popped is 2");
 
     // Test finding a position in a List
-    print("\nFinding positions of values in the List...\n", .{});
+    mhead("Finding positions of values in the List");
     // comparison function
     const cmp = struct {
         fn cmp(a: i32, b: i32) bool {
@@ -128,11 +148,15 @@ test "List" {
 
     const pos3: ?u32 = list.position(3, cmp);
     try testing.expect(pos3.? == 0);
-    print("\t...Position of 3 is 0\n", .{});
+    mtest("Position of 3 is 0");
 
     const pos2: ?u32 = list.position(2, cmp);
     try testing.expect(pos2 == null);
-    print("\t...Position of 2 is null\n", .{});
+    mtest("Position of 2 is null");
+
+    mhead("Freeing List");
+    list.free();
+    mtest("List freed");
 
     print("\n", .{});
 }
