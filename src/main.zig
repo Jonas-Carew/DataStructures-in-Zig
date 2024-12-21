@@ -1,8 +1,8 @@
 const std = @import("std");
 const testing = std.testing;
 
-const List = @import("list.zig").List;
 const DynArray = @import("dynArray.zig").DynArray;
+const List = @import("list.zig").List;
 
 pub fn dynArray() !void {}
 
@@ -50,6 +50,8 @@ pub fn main() !void {
         }.get;
 
         // the choice menu
+        // an array of tuples
+        // each tuple has a string selector, a description, and a function
         const text = [_]struct { []const u8, []const u8, *const fn () anyerror!void }{
             .{ "A", "Dynamic Array", dynArray },
             .{ "L", "Linked List", list },
@@ -62,7 +64,9 @@ pub fn main() !void {
 
         // START OF MAIN //
         main: while (true) {
+            // running the data structures
             data: while (true) : (try w.print("\nPlease input a valid answer\n", .{})) {
+                // choice menu output & response
                 try w.print("\nSelect the data structure to use:\n", .{});
                 for (text) |tup| {
                     try w.print("\t[{s}] {s}\n", .{ tup[0], tup[1] });
@@ -70,11 +74,9 @@ pub fn main() !void {
                 try out.flush();
                 try get(r, &input);
 
-                check: for (text) |tup| {
-                    if (input.items.len != tup[0].len) continue;
-                    for (input.items, tup[0]) |i, t| {
-                        if (std.ascii.toLower(i) != std.ascii.toLower(t)) continue :check;
-                    }
+                // check valid response & run function
+                for (text) |tup| {
+                    if (!std.ascii.eqlIgnoreCase(input.items, tup[0])) continue;
                     tup[2]() catch |err| if (err == error.Quit) {
                         break :main;
                     } else return err;
@@ -82,15 +84,16 @@ pub fn main() !void {
                 }
             }
 
-            repeat: while (true) {
+            // prompting to run another
+            repeat: while (true) : (try w.print("\nPlease input a valid answer\n", .{})) {
+                // question output & response
                 try w.print("\nWould you like to test another data structure? [y/n]\n", .{});
                 try out.flush();
                 try get(r, &input);
 
+                // check for valid response & goto
                 if (std.ascii.eqlIgnoreCase(input.items, "y")) break :repeat;
                 if (std.ascii.eqlIgnoreCase(input.items, "n")) break :main;
-
-                try w.print("\nPlease input a valid answer\n", .{});
             }
         }
     }
