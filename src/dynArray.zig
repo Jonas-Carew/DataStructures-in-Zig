@@ -8,7 +8,6 @@ pub fn Dynarray(comptime T: type) type {
 
         // Defintions
         const DynArrayError = error{
-            PoppedEmptyList,
             IndexOutOfBounds,
         };
 
@@ -17,38 +16,43 @@ pub fn Dynarray(comptime T: type) type {
         _allocator: Allocator,
         _capacity: usize,
         _size: usize,
-        _data: ?[]T,
+        _data: []T,
 
         pub fn init(allocator: Allocator) Self {
             return .{
                 ._allocator = allocator,
                 ._capacity = 0,
                 ._size = 0,
-                ._data = null,
+                ._data = undefined,
             };
         }
 
         pub fn deinit(self: *Self) void {
-            if (self._data != null) {
-                self._allocator.free(self._data.?);
+            if (self._capacity > 0) {
+                self._allocator.free(self._data);
             }
         }
 
-        pub fn display(
+        pub fn toOwnedStr(
             self: Self,
-            prn: *const fn (v: T, allo: Allocator) anyerror![]u8,
+            prn: *const fn (allo: Allocator, v: T) anyerror![]u8,
         ) ![]u8 {
-            const data = self._data orelse return "";
-
-            var text: []u8 = try prn(data[0], self._allocator);
+            // empty array case
+            if (self._size == 0) return try std.fmt.allocPrint(self._allocator, "", .{});
+            // special first case
+            var text: []u8 = try prn(self._allocator, self._data[0]);
             var disp: []u8 = try std.fmt.allocPrint(self._allocator, "{s}", .{text});
             self._allocator.free(text);
-
             var disp_free: []u8 = undefined;
+            // loop for remaining indices
             for (1..self._size) |idx| {
                 disp_free = disp;
-                text = try prn(data[idx], self._allocator);
-                disp = try std.fmt.allocPrint(self._allocator, "{s}, {s}", .{ disp, text });
+                text = try prn(self._allocator, self._data[idx]);
+                disp = try std.fmt.allocPrint(
+                    self._allocator,
+                    "{s}, {s}",
+                    .{ disp, text },
+                );
                 self._allocator.free(text);
                 self._allocator.free(disp_free);
             }
@@ -69,32 +73,37 @@ pub fn Dynarray(comptime T: type) type {
                 self._capacity *= 2;
                 var new_data: []T = try self._allocator.alloc(T, self._capacity);
                 // self._data is only null if capacity is 0
-                for (self._data.?, 0..) |data, idx| {
+                for (self._data, 0..) |data, idx| {
                     new_data[idx] = data;
                 }
-                self._allocator.free(self._data.?);
+                self._allocator.free(self._data);
                 self._data = new_data;
             }
-            self._data.?[self._size] = value;
+            self._data[self._size] = value;
             self._size += 1;
         }
 
         pub fn get(self: Self, pos: usize) !T {
-            _ = self;
-            _ = pos;
-            return error{};
+            if ((pos >= self._size) or (pos < 0)) return DynArrayError.IndexOutOfBounds;
+            return self._data[pos];
         }
 
         pub fn remove(self: *Self, pos: usize) !T {
-            _ = self;
-            _ = pos;
-            return error{};
+            if ((pos >= self._size) or (pos < 0)) return DynArrayError.IndexOutOfBounds;
+
+            const val: T = self._data[pos];
+
+            self._size -= 1;
+            for (pos..self._size) |idx| {
+                self._data[idx] = self._data[idx + 1];
+            }
+
+            return val;
         }
 
-        pub fn set(self: *Self, pos: usize) !void {
-            _ = self;
-            _ = pos;
-            return error{};
+        pub fn set(self: *Self, pos: usize, value: T) !void {
+            if ((pos >= self._size) or (pos < 0)) return DynArrayError.IndexOutOfBounds;
+            self._data[pos] == value;
         }
     };
 }
@@ -116,13 +125,31 @@ test "Dynarray" {
     try da.insert(10);
     try da.insert(20);
 
+    try testing.expect(da._capacity == 4);
+
     const prn = struct {
-        fn prn(v: i32, a: Allocator) ![]u8 {
-            return try std.fmt.allocPrint(a, "{}", .{v});
+        fn prn(a: Allocator, v: i32) ![]u8 {
+            return try std.fmt.allocPrint(a, "{d}", .{v});
         }
     }.prn;
 
-    const disp: []u8 = try da.display(prn);
-    defer allo.free(disp);
-    std.debug.print("{s}\n", .{disp});
+    const str: []u8 = try da.toOwnedStr(prn);
+    defer allo.free(str);
+    try testing.expect(std.mem.eql(u8, str, "5, 10, 20"));
+
+    const rem1: i32 = try da.remove(0);
+    try testing.expect(rem1 == 5);
+
+    const str1: []u8 = try da.toOwnedStr(prn);
+    defer allo.free(str1);
+    try testing.expect(std.mem.eql(u8, str1, "10, 20"));
+
+    const rem2: i32 = try da.remove(0);
+    try testing.expect(rem2 == 10);
+    const rem3: i32 = try da.remove(0);
+    try testing.expect(rem3 == 20);
+
+    const str2: []u8 = try da.toOwnedStr(prn);
+    defer allo.free(str2);
+    try testing.expect(std.mem.eql(u8, str2, ""));
 }
