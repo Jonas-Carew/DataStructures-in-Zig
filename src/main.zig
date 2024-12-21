@@ -1,14 +1,12 @@
 const std = @import("std");
 const testing = std.testing;
 
-const cKV = @import("cKV.zig").cKV_str;
-
 const List = @import("list.zig").List;
 const DynArray = @import("dynArray.zig").DynArray;
 
-pub fn list() !void {}
-
 pub fn dynArray() !void {}
+
+pub fn list() !void {}
 
 pub fn main() !void {
     // inner scope allows us to defer errors to be returned
@@ -51,27 +49,37 @@ pub fn main() !void {
             }
         }.get;
 
-        const choice = struct {
-            text: []const u8,
-            play: *const fn () anyerror!void,
+        // the choice menu
+        const text = [_]struct { []const u8, []const u8, *const fn () anyerror!void }{
+            .{ "A", "Dynamic Array", dynArray },
+            .{ "L", "Linked List", list },
+            .{ "Q", "Quit", struct {
+                fn quit() !void {
+                    return error.Quit;
+                }
+            }.quit },
         };
 
         // START OF MAIN //
         main: while (true) {
             data: while (true) : (try w.print("\nPlease input a valid answer\n", .{})) {
-                const text = cKV([_]struct { []const u8, choice }{
-                    .{ "Q", choice{ .text = "Quit", .play = list } },
-                    .{ "L", choice{ .text = "Linked List", .play = list } },
-                    .{ "A", choice{ .text = "Dynamic Array", .play = list } },
-                });
                 try w.print("\nSelect the data structure to use:\n", .{});
-                for (text.getKeys()) |key| {
-                    try w.print("\t[{s}] {s}\n", .{ key, text.getValue(key).?.text });
+                for (text) |tup| {
+                    try w.print("\t[{s}] {s}\n", .{ tup[0], tup[1] });
                 }
                 try out.flush();
                 try get(r, &input);
-                try (text.getValueCaseless(input.items) orelse continue :data).play();
-                break;
+
+                check: for (text) |tup| {
+                    if (input.items.len != tup[0].len) continue;
+                    for (input.items, tup[0]) |i, t| {
+                        if (std.ascii.toLower(i) != std.ascii.toLower(t)) continue :check;
+                    }
+                    tup[2]() catch |err| if (err == error.Quit) {
+                        break :main;
+                    } else return err;
+                    break :data;
+                }
             }
 
             repeat: while (true) {
