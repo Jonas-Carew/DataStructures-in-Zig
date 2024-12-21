@@ -1,12 +1,8 @@
 const std = @import("std");
 const testing = std.testing;
 
-const DynArray = @import("dynArray.zig").DynArray;
-const List = @import("list.zig").List;
-
-pub fn dynArray() !void {}
-
-pub fn list() !void {}
+const dynArray = @import("dynArray.zig").play;
+const list = @import("list.zig").play;
 
 pub fn main() !void {
     // inner scope allows us to defer errors to be returned
@@ -52,7 +48,7 @@ pub fn main() !void {
         // the choice menu
         // an array of tuples
         // each tuple has a string selector, a description, and a function
-        const text = [_]struct { []const u8, []const u8, *const fn () anyerror!void }{
+        const menu = [_]struct { []const u8, []const u8, *const fn () anyerror!void }{
             .{ "A", "Dynamic Array", dynArray },
             .{ "L", "Linked List", list },
             .{ "Q", "Quit", struct {
@@ -68,14 +64,14 @@ pub fn main() !void {
             data: while (true) : (try w.print("\nPlease input a valid answer\n", .{})) {
                 // choice menu output & response
                 try w.print("\nSelect the data structure to use:\n", .{});
-                for (text) |tup| {
+                for (menu) |tup| {
                     try w.print("\t[{s}] {s}\n", .{ tup[0], tup[1] });
                 }
                 try out.flush();
                 try get(r, &input);
 
                 // check valid response & run function
-                for (text) |tup| {
+                for (menu) |tup| {
                     if (!std.ascii.eqlIgnoreCase(input.items, tup[0])) continue;
                     tup[2]() catch |err| if (err == error.Quit) {
                         break :main;

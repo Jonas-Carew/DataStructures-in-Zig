@@ -167,6 +167,8 @@ pub fn List(comptime T: type) type {
     };
 }
 
+pub fn play() !void {}
+
 // Full Test
 test "List" {
     // init the Arena Allocator and GPA
