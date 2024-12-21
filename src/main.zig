@@ -66,12 +66,11 @@ pub fn main() !void {
                 });
                 try w.print("\nSelect the data structure to use:\n", .{});
                 for (text.getKeys()) |key| {
-                    try w.print("\t[{s}] {s}\n", .{ key, text.getValue(key) });
+                    try w.print("\t[{s}] {s}\n", .{ key, text.getValue(key).?.text });
                 }
                 try out.flush();
                 try get(r, &input);
-                const toPlay = text.getValue(input.items) orelse continue :data;
-                try toPlay.play();
+                try (text.getValueCaseless(input.items) orelse continue :data).play();
                 break;
             }
 
@@ -80,8 +79,7 @@ pub fn main() !void {
                 try out.flush();
                 try get(r, &input);
 
-                if (std.ascii.eqlIgnoreCase(input.items, "y"))
-                    break :repeat;
+                if (std.ascii.eqlIgnoreCase(input.items, "y")) break :repeat;
                 if (std.ascii.eqlIgnoreCase(input.items, "n")) break :main;
 
                 try w.print("\nPlease input a valid answer\n", .{});

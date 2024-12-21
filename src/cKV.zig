@@ -34,6 +34,17 @@ pub fn cKV_str(inlist: anytype) type {
             }
             return null;
         }
+
+        pub fn getValueCaseless(inkey: KeyType) ?ValueType {
+            key: for (keys, 0..) |key, i| {
+                if (key.len != inkey.len) continue;
+                for (key, inkey) |c, inc| {
+                    if (std.ascii.toLower(c) != std.ascii.toLower(inc)) continue :key;
+                }
+                return values[i];
+            }
+            return null;
+        }
     };
 }
 
@@ -54,4 +65,5 @@ test "cKV" {
     }
 
     try testing.expect(list.getValue("b") == 2);
+    try testing.expect(list.getValueCaseless("C") == 3);
 }
