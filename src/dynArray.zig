@@ -3,7 +3,7 @@ const std = @import("std");
 const testing = std.testing;
 const Allocator = std.mem.Allocator;
 
-pub fn Dynarray(comptime T: type) type {
+pub fn DynArray(comptime T: type) type {
     return struct {
 
         // Defintions
@@ -109,7 +109,7 @@ pub fn Dynarray(comptime T: type) type {
 }
 
 // Full Test
-test "Dynarray" {
+test "DynArray" {
     // init the Arena Allocator and GPA
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer testing.expect(gpa.deinit() != .leak) catch @panic("MEMORY LEAK");
@@ -118,7 +118,7 @@ test "Dynarray" {
     const allo = gpa.allocator();
 
     // Test Creating a List
-    var da = Dynarray(i32).init(allo);
+    var da = DynArray(i32).init(allo);
     defer da.deinit();
 
     try da.insert(5);
