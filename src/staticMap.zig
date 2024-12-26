@@ -1,5 +1,34 @@
 const std = @import("std");
 
+// standard static maps
+pub fn StaticStringMap(comptime V: type) type {
+    return StaticMap(
+        []const u8,
+        V,
+        stringHash,
+        stringEql,
+    );
+}
+
+pub fn StaticStringMapFirst(comptime V: type) type {
+    return StaticMap(
+        []const u8,
+        V,
+        stringHashFirst,
+        stringEql,
+    );
+}
+
+// standard hash functions
+pub fn stringHash(item: []const u8) usize {
+    return item.len;
+}
+
+pub fn stringHashFirst(item: []const u8) usize {
+    return @intCast(item[0]);
+}
+
+// standard equality functions
 pub fn stringEql(a: []const u8, b: []const u8) bool {
     if (a.ptr == b.ptr) return true;
     for (a, b) |i, j| {
@@ -24,11 +53,7 @@ pub fn stringSingleEqlCaseless(a: []const u8, b: []const u8) bool {
     return (std.ascii.toLower(a[0]) == std.ascii.toLower(b[0]));
 }
 
-pub fn stringHash(item: []const u8) usize {
-    return item.len;
-}
-
-pub fn staticMap(
+pub fn StaticMap(
     comptime K: type,
     comptime V: type,
     comptime hash: fn (item: K) usize,
@@ -38,7 +63,7 @@ pub fn staticMap(
         kvs: *const KVs = &empty_kvs,
         kv_refs: [*]const usize = &empty_refs,
         kv_refs_len: usize = 0,
-        min_ref: usize = 0,
+        min_ref: usize = std.math.maxInt(usize),
         max_ref: usize = 0,
 
         const Self = @This();
@@ -82,7 +107,7 @@ pub fn staticMap(
                     .len = kvs_list.len,
                 };
 
-                var refs: [self.max_ref + 1]usize = undefined;
+                var refs: [1 + self.max_ref - self.min_ref]usize = undefined;
                 self.initRefs(&refs);
                 const final_refs = refs;
                 self.kv_refs = &final_refs;
@@ -112,11 +137,11 @@ pub fn staticMap(
 
         fn initRefs(self: Self, refs: []usize) void {
             var current_ref: usize = 0;
-            for (0..self.max_ref) |ref| {
+            for (self.min_ref..(self.max_ref + 1)) |ref| {
                 while (ref > hash(self.kvs.keys[current_ref])) {
                     current_ref += 1;
                 }
-                refs[ref] = current_ref;
+                refs[ref - self.min_ref] = current_ref;
             }
         }
 
@@ -157,12 +182,12 @@ pub fn staticMap(
 
             if (kvs.len == 0) return null;
 
-            const k_hash = hash(key);
-            if ((k_hash < self.min_ref) or (k_hash > self.max_ref)) return null;
+            const ref: usize = hash(key);
+            if ((ref < self.min_ref) or (ref > self.max_ref)) return null;
 
-            for (self.kv_refs[k_hash]..kvs.len) |i| {
+            for (self.kv_refs[ref - self.min_ref]..kvs.len) |i| {
                 const map_key = kvs.keys[i];
-                if (hash(map_key) != k_hash) return null;
+                if (hash(map_key) != ref) return null;
                 if (eql(key, map_key)) return i;
             }
             return null;
@@ -172,7 +197,7 @@ pub fn staticMap(
 
 test "standardStrings" {
     const Item = struct { []const u8, u8 };
-    const stringMap = staticMap([]const u8, u8, stringHash, stringEql)
+    const stringMap = StaticMap([]const u8, u8, stringHashFirst, stringEql)
         .initComptime([_]Item{
         .{ "Goodbye", 1 },
         .{ "Worlds", 2 },
