@@ -5,31 +5,37 @@ pub fn StaticStringMap(comptime V: type) type {
     return StaticMap(
         []const u8,
         V,
-        stringHash,
-        stringEql,
+        stringHashLength,
+        stringLenlessEql,
     );
 }
 
-pub fn StaticStringMapFirst(comptime V: type) type {
+pub fn MenuMap(comptime V: type) type {
     return StaticMap(
         []const u8,
         V,
-        stringHashFirst,
-        stringEql,
+        stringHashFirstCaseless,
+        stringEqlCaseless,
     );
 }
 
 // standard hash functions
-pub fn stringHash(item: []const u8) usize {
+pub fn stringHashLength(item: []const u8) usize {
     return item.len;
 }
 
 pub fn stringHashFirst(item: []const u8) usize {
+    if (item.len == 0) return 0;
     return @intCast(item[0]);
 }
 
+pub fn stringHashFirstCaseless(item: []const u8) usize {
+    if (item.len == 0) return 0;
+    return @intCast(std.ascii.toUpper(item[0]));
+}
+
 // standard equality functions
-pub fn stringEql(a: []const u8, b: []const u8) bool {
+pub fn stringLenlessEql(a: []const u8, b: []const u8) bool {
     if (a.ptr == b.ptr) return true;
     for (a, b) |i, j| {
         if (i != j) return false;
@@ -37,20 +43,20 @@ pub fn stringEql(a: []const u8, b: []const u8) bool {
     return true;
 }
 
-pub fn stringEqlCaseless(a: []const u8, b: []const u8) bool {
+pub fn stringLenlessEqlCaseless(a: []const u8, b: []const u8) bool {
     if (a.ptr == b.ptr) return true;
     for (a, b) |i, j| {
-        if (std.ascii.toLower(i) != std.ascii.toLower(j)) return false;
+        if (std.ascii.toUpper(i) != std.ascii.toUpper(j)) return false;
     }
     return true;
 }
 
-pub fn stringSingleEql(a: []const u8, b: []const u8) bool {
-    return (a[0] == b[0]);
+pub fn stringEql(a: []const u8, b: []const u8) bool {
+    return std.mem.eql(u8, a, b);
 }
 
-pub fn stringSingleEqlCaseless(a: []const u8, b: []const u8) bool {
-    return (std.ascii.toLower(a[0]) == std.ascii.toLower(b[0]));
+pub fn stringEqlCaseless(a: []const u8, b: []const u8) bool {
+    return std.ascii.eqlIgnoreCase(a, b);
 }
 
 pub fn StaticMap(
@@ -93,7 +99,7 @@ pub fn StaticMap(
                 var self = Self{};
                 if (kvs_list.len == 0) return self;
 
-                // set eval branch quota ???
+                // set eval branch quota if needed
 
                 var sorted_keys: [kvs_list.len]K = undefined;
                 var sorted_values: [kvs_list.len]V = undefined;
@@ -197,16 +203,17 @@ pub fn StaticMap(
 
 test "standardStrings" {
     const Item = struct { []const u8, u8 };
-    const stringMap = StaticMap([]const u8, u8, stringHashFirst, stringEql)
+    const stringMap = StaticMap([]const u8, u8, stringHashFirstCaseless, stringEqlCaseless)
         .initComptime([_]Item{
         .{ "Goodbye", 1 },
         .{ "Worlds", 2 },
         .{ "Hello", 3 },
+        .{ "A", 4 },
     });
 
     for (stringMap.keys(), stringMap.values()) |key, value| {
         std.debug.print("{s}: {d}\n", .{ key, value });
     }
 
-    std.debug.print("Number of worlds: {d}\n", .{stringMap.get("Worlds").?});
+    std.debug.print("Number of worlds: {d}\n", .{stringMap.get("woRlDs").?});
 }

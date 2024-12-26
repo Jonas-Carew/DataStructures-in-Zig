@@ -1,5 +1,7 @@
 const std = @import("std");
 
+const sm = @import("staticMap.zig");
+
 const testing = std.testing;
 const Allocator = std.mem.Allocator;
 
@@ -121,7 +123,7 @@ pub fn play() !void {
         // use "w.print" to print to buffer
         // try out.flush to print to stdout
         var out = std.io.bufferedWriter(std.io.getStdOut().writer());
-        var w = out.writer();
+        const w = out.writer();
         defer out.flush() catch |err| {
             ret = err;
         };
@@ -145,8 +147,26 @@ pub fn play() !void {
             }
         }.get;
 
+        const context = struct {
+            out: @TypeOf(&out),
+            w: @TypeOf(&w),
+            in: @TypeOf(&in),
+            r: @TypeOf(&r),
+            input: @TypeOf(&input),
+            allo: @TypeOf(&allo),
+        };
+        const cx = context{
+            .out = &out,
+            .w = &w,
+            .in = &in,
+            .r = &r,
+            .input = &input,
+            .allo = &allo,
+        };
+
         // our dynamic array of strings
-        var da = DynArray([]const u8).init(allo);
+        const daType = DynArray([]const u8);
+        var da = daType.init(allo);
         defer {
             for (0..da.getSize()) |i| {
                 allo.free(da.get(i) catch |err| {
@@ -157,26 +177,105 @@ pub fn play() !void {
             da.deinit();
         }
 
-        // string printer
+        // string printer for dynarray
         const prn = struct {
             fn prn(a: Allocator, v: []const u8) ![]u8 {
                 return try std.fmt.allocPrint(a, "{s}", .{v});
             }
         }.prn;
 
+        const _size = struct {
+            fn _size(icx: context, ida: *daType) !void {
+                try icx.w.print("The size of the dynamic array is {d}\n", .{ida.getSize()});
+            }
+        }._size;
+
+        const _get = struct {
+            fn _get(icx: context, ida: *daType) !void {
+                while (true) : ({
+                    try icx.w.print("\nPlease input a valid index\n", .{});
+                }) {
+                    try icx.w.print("Enter the index to get: ", .{});
+                    try icx.out.flush();
+                    try get(icx.r, icx.input);
+                    const n: usize = std.fmt.parseInt(usize, icx.input.items, 10) catch continue;
+                    try icx.w.print("The item at index {d} is {s}\n", .{ n, ida.get(n) catch continue });
+                    break;
+                }
+            }
+        }._get;
+
+        const _insert = struct {
+            fn _insert(icx: context, ida: *daType) !void {
+                try icx.w.print("Enter the string to insert: ", .{});
+                try icx.out.flush();
+                try get(icx.r, icx.input);
+                try ida.insert(try icx.input.toOwnedSlice());
+            }
+        }._insert;
+
+        const _set = struct {
+            fn _set(icx: context, ida: *daType) !void {
+                var n: usize = undefined;
+                while (true) : ({
+                    try icx.w.print("\nPlease input a valid index\n", .{});
+                }) {
+                    try icx.w.print("Enter the index to get: ", .{});
+                    try icx.out.flush();
+                    try get(icx.r, icx.input);
+                    n = std.fmt.parseInt(usize, icx.input.items, 10) catch continue;
+                    icx.allo.free(ida.get(n) catch continue);
+                    break;
+                }
+                try icx.w.print("Enter the string to replace index {d}: ", .{n});
+                try icx.out.flush();
+                try get(icx.r, icx.input);
+                try ida.set(n, try icx.input.toOwnedSlice());
+            }
+        }._set;
+
+        const _delete = struct {
+            fn _delete(icx: context, ida: *daType) !void {
+                while (true) : ({
+                    try icx.w.print("\nPlease input a valid index\n", .{});
+                }) {
+                    try icx.w.print("Enter the index to delete: ", .{});
+                    try icx.out.flush();
+                    try get(icx.r, icx.input);
+                    const n = std.fmt.parseInt(usize, icx.input.items, 10) catch continue;
+                    icx.allo.free(ida.delete(n) catch continue);
+                    break;
+                }
+            }
+        }._delete;
+
+        // choice menu
         const menuItem = struct {
-            selector: []const u8,
-            descriptor: []const u8,
+            description: []const u8,
+            func: *const fn (icx: context, ida: *daType) anyerror!void,
         };
-        // menu
-        const menu = [_]menuItem{
-            .{ .selector = "1", .descriptor = "Get the size of the dynamic array" },
-            .{ .selector = "2", .descriptor = "Get the item at an index of the dynamic array" },
-            .{ .selector = "3", .descriptor = "Insert an item to the end of the dynamic array" },
-            .{ .selector = "4", .descriptor = "Set an item at an index of the dynamic array" },
-            .{ .selector = "5", .descriptor = "Delete the item at an index of the dynamic array" },
-            .{ .selector = "Q", .descriptor = "Quit" },
+        const mapItem = struct { []const u8, menuItem };
+
+        const menuItems = [_]mapItem{
+            .{ "Z", .{ .description = "Get the size of the dynamic array", .func = _size } },
+            .{ "G", .{ .description = "Get the item at an index of the dynamic array", .func = _get } },
+            .{ "I", .{ .description = "Insert an item to the end of the dynamic array", .func = _insert } },
+            .{ "S", .{ .description = "Set an item at an index of the dynamic array", .func = _set } },
+            .{ "D", .{ .description = "Delete the item at an index of the dynamic array", .func = _delete } },
+            .{ "Q", .{ .description = "Quit", .func = struct {
+                fn quit(icx: context, ida: *daType) !void {
+                    _ = icx;
+                    _ = ida;
+                    return error.quit;
+                }
+            }.quit } },
         };
+        const menuFull = sm.MenuMap(menuItem).initComptime(menuItems[0..]);
+        const menuOrderFull = [_][]const u8{ "I", "S", "D", "G", "Z", "Q" };
+        const menuEmpty = sm.MenuMap(menuItem).initComptime(
+            [_]mapItem{ menuItems[0], menuItems[2], menuItems[5] },
+        );
+        const menuOrderEmpty = [_][]const u8{ "I", "Z", "Q" };
 
         // START OF MAIN //
         try w.print("\n\nWelcome to the dynamic array playground!\n", .{});
@@ -186,74 +285,21 @@ pub fn play() !void {
             try w.print("\nYour current dynamic array looks like this:\n", .{});
             try w.print("{s}\n", .{str});
             try w.print("What would you like to do?\n", .{});
-            for (menu) |item| {
-                try w.print("\t[{s}] {s}\n", .{ item.selector, item.descriptor });
+            const menu = if (da.getSize() > 0) &menuFull else &menuEmpty;
+            const menuOrder = if (da.getSize() > 0) &menuOrderFull else &menuOrderEmpty;
+            for (menuOrder) |item| {
+                try w.print("\t[{s}] {s}\n", .{ item, menu.get(item).?.description });
             }
             try out.flush();
             try get(r, &input);
 
-            if (std.ascii.eqlIgnoreCase(input.items, "q")) break;
-            switch (std.fmt.parseInt(u8, input.items, 10) catch {
-                try w.print("Please input a valid answer", .{});
+            (menu.get(input.items) orelse {
+                try w.print("\nPlease input a valid answer\n", .{});
                 continue;
-            }) {
-                1 => {
-                    try w.print("The size of the dynamic array is {d}\n", .{da.getSize()});
-                },
-                2 => {
-                    while (true) : ({
-                        try w.print("Please input a valid index\n", .{});
-                    }) {
-                        try w.print("Enter the index to get: ", .{});
-                        try out.flush();
-                        try get(r, &input);
-                        const n: usize = std.fmt.parseInt(usize, input.items, 10) catch continue;
-                        try w.print("The item at index {d} is {s}\n", .{ n, da.get(n) catch continue });
-                        break;
-                    }
-                },
-                3 => {
-                    try w.print("Enter the string to insert: ", .{});
-                    try out.flush();
-                    try get(r, &input);
-                    try da.insert(try input.toOwnedSlice());
-                },
-                4 => {
-                    var n: usize = undefined;
-                    while (true) : ({
-                        try w.print("Please input a valid index\n", .{});
-                    }) {
-                        try w.print("Enter the index to get: ", .{});
-                        try out.flush();
-                        try get(r, &input);
-                        n = std.fmt.parseInt(usize, input.items, 10) catch continue;
-                        const toFree: []const u8 = da.get(n) catch continue;
-                        allo.free(toFree);
-                        break;
-                    }
-                    try w.print("Enter the string to replace index {d}: ", .{n});
-                    try out.flush();
-                    try get(r, &input);
-                    try da.set(n, try input.toOwnedSlice());
-                },
-                5 => {
-                    while (true) : ({
-                        try w.print("Please input a valid index\n", .{});
-                    }) {
-                        try w.print("Enter the index to delete: ", .{});
-                        try out.flush();
-                        try get(r, &input);
-                        const n = std.fmt.parseInt(usize, input.items, 10) catch continue;
-                        allo.free(da.delete(n) catch continue);
-                        break;
-                    }
-                },
-                // change this to an enum / for loop to merge catch and else
-                else => {
-                    try w.print("Please input a valid answer", .{});
-                    continue;
-                },
-            }
+            }).func(cx, &da) catch |err| {
+                if (err == error.quit) break;
+                return err;
+            };
         }
     }
     return ret;

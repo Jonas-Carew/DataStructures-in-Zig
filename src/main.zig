@@ -23,7 +23,7 @@ pub fn main() !void {
         // use "w.print" to print to buffer
         // try out.flush to print to stdout
         var out = std.io.bufferedWriter(std.io.getStdOut().writer());
-        var w = out.writer();
+        const w = out.writer();
         defer out.flush() catch |err| {
             ret = err;
         };
@@ -48,21 +48,21 @@ pub fn main() !void {
         }.get;
 
         // the choice menu
-        // an array of tuples
         const menuItem = struct {
-            selector: []const u8,
-            descriptor: []const u8,
+            description: []const u8,
             func: *const fn () anyerror!void,
         };
-        const menu = [_]menuItem{
-            .{ .selector = "A", .descriptor = "Dynamic Array", .func = dynArray },
-            .{ .selector = "L", .descriptor = "Linked List", .func = list },
-            .{ .selector = "Q", .descriptor = "Quit", .func = struct {
+        const mapItem = struct { []const u8, menuItem };
+        const menuItems = sm.MenuMap(menuItem).initComptime([_]mapItem{
+            .{ "A", .{ .description = "Dynamic Array", .func = dynArray } },
+            .{ "L", .{ .description = "Linked List", .func = list } },
+            .{ "Q", .{ .description = "Quit", .func = struct {
                 fn quit() !void {
                     return error.Quit;
                 }
-            }.quit },
-        };
+            }.quit } },
+        });
+        const menuOrder = [_][]const u8{ "A", "L", "Q" };
 
         // START OF MAIN //
         main: while (true) {
@@ -70,20 +70,20 @@ pub fn main() !void {
             data: while (true) : (try w.print("\nPlease input a valid answer\n", .{})) {
                 // choice menu output & response
                 try w.print("\nSelect the data structure to use:\n", .{});
+                const menu = &menuOrder;
                 for (menu) |item| {
-                    try w.print("\t[{s}] {s}\n", .{ item.selector, item.descriptor });
+                    try w.print(
+                        "\t[{s}] {s}\n",
+                        .{ item, menuItems.get(item).?.description },
+                    );
                 }
                 try out.flush();
                 try get(r, &input);
 
                 // check valid response & run function
-                for (menu) |item| {
-                    if (!std.ascii.eqlIgnoreCase(input.items, item.selector)) continue;
-                    item.func() catch |err| if (err == error.Quit) {
-                        break :main;
-                    } else return err;
-                    break :data;
-                }
+                const item = menuItems.get(input.items) orelse continue :data;
+                item.func() catch |err| if (err == error.Quit) break :main else return err;
+                break :data;
             }
 
             // prompting to run another
