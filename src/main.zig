@@ -47,11 +47,15 @@ pub fn main() !void {
 
         // the choice menu
         // an array of tuples
-        // each tuple has a string selector, a description, and a function
-        const menu = [_]struct { []const u8, []const u8, *const fn () anyerror!void }{
-            .{ "A", "Dynamic Array", dynArray },
-            .{ "L", "Linked List", list },
-            .{ "Q", "Quit", struct {
+        const menuItem = struct {
+            selector: []const u8,
+            descriptor: []const u8,
+            func: *const fn () anyerror!void,
+        };
+        const menu = [_]menuItem{
+            .{ .selector = "A", .descriptor = "Dynamic Array", .func = dynArray },
+            .{ .selector = "L", .descriptor = "Linked List", .func = list },
+            .{ .selector = "Q", .descriptor = "Quit", .func = struct {
                 fn quit() !void {
                     return error.Quit;
                 }
@@ -64,16 +68,16 @@ pub fn main() !void {
             data: while (true) : (try w.print("\nPlease input a valid answer\n", .{})) {
                 // choice menu output & response
                 try w.print("\nSelect the data structure to use:\n", .{});
-                for (menu) |tup| {
-                    try w.print("\t[{s}] {s}\n", .{ tup[0], tup[1] });
+                for (menu) |item| {
+                    try w.print("\t[{s}] {s}\n", .{ item.selector, item.descriptor });
                 }
                 try out.flush();
                 try get(r, &input);
 
                 // check valid response & run function
-                for (menu) |tup| {
-                    if (!std.ascii.eqlIgnoreCase(input.items, tup[0])) continue;
-                    tup[2]() catch |err| if (err == error.Quit) {
+                for (menu) |item| {
+                    if (!std.ascii.eqlIgnoreCase(input.items, item.selector)) continue;
+                    item.func() catch |err| if (err == error.Quit) {
                         break :main;
                     } else return err;
                     break :data;

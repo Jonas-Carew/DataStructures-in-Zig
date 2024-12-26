@@ -38,11 +38,10 @@ pub fn DynArray(comptime T: type) type {
             prn: *const fn (allo: Allocator, v: T) anyerror![]u8,
         ) ![]u8 {
             // empty array case
-            if (self._size == 0) return try std.fmt.allocPrint(self._allocator, "", .{});
+            if (self._size <= 0) return try std.fmt.allocPrint(self._allocator, "", .{});
             // special first case
-            var text: []u8 = try prn(self._allocator, self._data[0]);
-            var disp: []u8 = try std.fmt.allocPrint(self._allocator, "{s}", .{text});
-            self._allocator.free(text);
+            var text: []u8 = undefined;
+            var disp: []u8 = try prn(self._allocator, self._data[0]);
             var disp_free: []u8 = undefined;
             // loop for remaining indices
             for (1..self._size) |idx| {
@@ -59,7 +58,7 @@ pub fn DynArray(comptime T: type) type {
             return disp;
         }
 
-        pub fn size(self: Self) usize {
+        pub fn getSize(self: Self) usize {
             return self._size;
         }
 
@@ -71,9 +70,9 @@ pub fn DynArray(comptime T: type) type {
             if (self._size >= self._capacity) {
                 self._capacity *= 2;
                 var new_data: []T = try self._allocator.alloc(T, self._capacity);
-                // self._data is only null if capacity is 0
-                for (self._data, 0..) |data, idx| {
-                    new_data[idx] = data;
+                // self._data is only undefined if capacity is 0
+                for (0..self._size) |idx| {
+                    new_data[idx] = self._data[idx];
                 }
                 self._allocator.free(self._data);
                 self._data = new_data;
@@ -87,7 +86,7 @@ pub fn DynArray(comptime T: type) type {
             return self._data[pos];
         }
 
-        pub fn remove(self: *Self, pos: usize) !T {
+        pub fn delete(self: *Self, pos: usize) !T {
             if ((pos >= self._size) or (pos < 0)) return DynArrayError.IndexOutOfBounds;
 
             const val: T = self._data[pos];
@@ -102,7 +101,7 @@ pub fn DynArray(comptime T: type) type {
 
         pub fn set(self: *Self, pos: usize, value: T) !void {
             if ((pos >= self._size) or (pos < 0)) return DynArrayError.IndexOutOfBounds;
-            self._data[pos] == value;
+            self._data[pos] = value;
         }
     };
 }
@@ -147,24 +146,36 @@ pub fn play() !void {
         }.get;
 
         // our dynamic array of strings
-        var da = DynArray(i32).init(allo);
-        defer da.deinit();
+        var da = DynArray([]const u8).init(allo);
+        defer {
+            for (0..da.getSize()) |i| {
+                allo.free(da.get(i) catch |err| {
+                    ret = err;
+                    continue;
+                });
+            }
+            da.deinit();
+        }
 
         // string printer
         const prn = struct {
-            fn prn(a: Allocator, v: i32) ![]u8 {
-                return try std.fmt.allocPrint(a, "{d}", .{v});
+            fn prn(a: Allocator, v: []const u8) ![]u8 {
+                return try std.fmt.allocPrint(a, "{s}", .{v});
             }
         }.prn;
 
+        const menuItem = struct {
+            selector: []const u8,
+            descriptor: []const u8,
+        };
         // menu
-        const menu = [_]struct { []const u8, []const u8 }{
-            .{ "1", "Get the size of the dynamic array" },
-            .{ "2", "Get the item at a position of the dynamic array" },
-            .{ "3", "Insert an item to the end of the dynamic array" },
-            .{ "4", "Set an item at a position of the dynamic array" },
-            .{ "5", "Delete the item at a position of the dynamic array" },
-            .{ "Q", "Quit" },
+        const menu = [_]menuItem{
+            .{ .selector = "1", .descriptor = "Get the size of the dynamic array" },
+            .{ .selector = "2", .descriptor = "Get the item at an index of the dynamic array" },
+            .{ .selector = "3", .descriptor = "Insert an item to the end of the dynamic array" },
+            .{ .selector = "4", .descriptor = "Set an item at an index of the dynamic array" },
+            .{ .selector = "5", .descriptor = "Delete the item at an index of the dynamic array" },
+            .{ .selector = "Q", .descriptor = "Quit" },
         };
 
         // START OF MAIN //
@@ -175,8 +186,8 @@ pub fn play() !void {
             try w.print("\nYour current dynamic array looks like this:\n", .{});
             try w.print("{s}\n", .{str});
             try w.print("What would you like to do?\n", .{});
-            for (menu) |tup| {
-                try w.print("\t[{s}] {s}\n", .{ tup[0], tup[1] });
+            for (menu) |item| {
+                try w.print("\t[{s}] {s}\n", .{ item.selector, item.descriptor });
             }
             try out.flush();
             try get(r, &input);
@@ -186,20 +197,57 @@ pub fn play() !void {
                 try w.print("Please input a valid answer", .{});
                 continue;
             }) {
-                1 => {},
-                2 => {},
-                3 => {
-                    while (true) : (try w.print("Please enter a valid number\n", .{})) {
-                        try w.print("Enter the number to insert: ", .{});
+                1 => {
+                    try w.print("The size of the dynamic array is {d}\n", .{da.getSize()});
+                },
+                2 => {
+                    while (true) : ({
+                        try w.print("Please input a valid index\n", .{});
+                    }) {
+                        try w.print("Enter the index to get: ", .{});
                         try out.flush();
                         try get(r, &input);
-                        const num: u8 = std.fmt.parseInt(u8, input.items, 10) catch continue;
-                        try da.insert(num);
+                        const n: usize = std.fmt.parseInt(usize, input.items, 10) catch continue;
+                        try w.print("The item at index {d} is {s}\n", .{ n, da.get(n) catch continue });
                         break;
                     }
                 },
-                4 => {},
-                5 => {},
+                3 => {
+                    try w.print("Enter the string to insert: ", .{});
+                    try out.flush();
+                    try get(r, &input);
+                    try da.insert(try input.toOwnedSlice());
+                },
+                4 => {
+                    var n: usize = undefined;
+                    while (true) : ({
+                        try w.print("Please input a valid index\n", .{});
+                    }) {
+                        try w.print("Enter the index to get: ", .{});
+                        try out.flush();
+                        try get(r, &input);
+                        n = std.fmt.parseInt(usize, input.items, 10) catch continue;
+                        const toFree: []const u8 = da.get(n) catch continue;
+                        allo.free(toFree);
+                        break;
+                    }
+                    try w.print("Enter the string to replace index {d}: ", .{n});
+                    try out.flush();
+                    try get(r, &input);
+                    try da.set(n, try input.toOwnedSlice());
+                },
+                5 => {
+                    while (true) : ({
+                        try w.print("Please input a valid index\n", .{});
+                    }) {
+                        try w.print("Enter the index to delete: ", .{});
+                        try out.flush();
+                        try get(r, &input);
+                        const n = std.fmt.parseInt(usize, input.items, 10) catch continue;
+                        allo.free(da.delete(n) catch continue);
+                        break;
+                    }
+                },
                 // change this to an enum / for loop to merge catch and else
                 else => {
                     try w.print("Please input a valid answer", .{});
@@ -213,7 +261,7 @@ pub fn play() !void {
 
 // Full Test
 test "DynArray" {
-    // init the Arena Allocator and GPA
+    // init the general purpose allocator
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer testing.expect(gpa.deinit() != .leak) catch @panic("MEMORY LEAK");
 
@@ -240,16 +288,16 @@ test "DynArray" {
     defer allo.free(str);
     try testing.expect(std.mem.eql(u8, str, "5, 10, 20"));
 
-    const rem1: i32 = try da.remove(0);
+    const rem1: i32 = try da.delete(0);
     try testing.expect(rem1 == 5);
 
     const str1: []u8 = try da.toOwnedStr(prn);
     defer allo.free(str1);
     try testing.expect(std.mem.eql(u8, str1, "10, 20"));
 
-    const rem2: i32 = try da.remove(0);
+    const rem2: i32 = try da.delete(0);
     try testing.expect(rem2 == 10);
-    const rem3: i32 = try da.remove(0);
+    const rem3: i32 = try da.delete(0);
     try testing.expect(rem3 == 20);
 
     const str2: []u8 = try da.toOwnedStr(prn);
