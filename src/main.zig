@@ -4,6 +4,8 @@ const testing = std.testing;
 const dynArray = @import("dynArray.zig").play;
 const list = @import("list.zig").play;
 
+const sm = @import("staticMap.zig");
+
 pub fn main() !void {
     // inner scope allows us to defer errors to be returned
     // e.g. flushing the write buffer or checking for memory leaks
