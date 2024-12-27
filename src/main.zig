@@ -85,18 +85,6 @@ pub fn main() !void {
                 item.func() catch |err| if (err == error.Quit) break :main else return err;
                 break :data;
             }
-
-            // prompting to run another
-            repeat: while (true) : (try w.print("\nPlease input a valid answer\n", .{})) {
-                // question output & response
-                try w.print("\nWould you like to test another data structure? [y/n]\n", .{});
-                try out.flush();
-                try get(r, &input);
-
-                // check for valid response & goto
-                if (std.ascii.eqlIgnoreCase(input.items, "y")) break :repeat;
-                if (std.ascii.eqlIgnoreCase(input.items, "n")) break :main;
-            }
         }
     }
     return ret;

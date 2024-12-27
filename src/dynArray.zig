@@ -199,7 +199,7 @@ pub fn play() !void {
                     try icx.out.flush();
                     try get(icx.r, icx.input);
                     const n: usize = std.fmt.parseInt(usize, icx.input.items, 10) catch continue;
-                    try icx.w.print("The item at index {d} is {s}\n", .{ n, ida.get(n) catch continue });
+                    try icx.w.print("The item at index {d} is \"{s}\"\n", .{ n, ida.get(n) catch continue });
                     break;
                 }
             }
