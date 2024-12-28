@@ -10,7 +10,6 @@ pub fn List(comptime T: type) type {
 
         // Defintions
         const ListError = error{
-            PoppedEmptyList,
             IndexOutOfBounds,
         };
 
@@ -101,8 +100,8 @@ pub fn List(comptime T: type) type {
         }
 
         // List pop
-        pub fn pop(self: *Self) !T {
-            const node: *Node = self._head orelse return ListError.PoppedEmptyList;
+        pub fn pop(self: *Self) ?T {
+            const node: *Node = self._head orelse return null;
             defer self._allocator.destroy(node);
             self._head = node.next;
             return node.value;
@@ -135,7 +134,7 @@ pub fn List(comptime T: type) type {
         }
 
         pub fn remove_pos(self: *Self, pos: usize) !T {
-            if (pos == 0) return pop(self);
+            if (pos == 0) return pop(self) orelse ListError.IndexOutOfBounds;
             // pos > 0
             var node: *Node = self._head orelse return ListError.IndexOutOfBounds;
             var prev_node: *Node = node;
@@ -286,7 +285,7 @@ pub fn play() !void {
 
         const _pop = struct {
             fn _pop(icx: context, ilist: *listType) !void {
-                const toFree = try ilist.pop();
+                const toFree = ilist.pop() orelse return;
                 try icx.w.print("The popped string from the linked list was \"{s}\"\n", .{toFree});
                 icx.allo.free(toFree);
             }
@@ -441,7 +440,7 @@ test "List" {
     try testing.expect(list._head != null);
 
     // Test popping from a List
-    const pop: i32 = try list.pop();
+    const pop: ?i32 = list.pop();
 
     try testing.expect(pop == 1);
 
@@ -465,8 +464,8 @@ test "List" {
     const pos5 = try list.remove_pos(5);
     try testing.expect(pos5 == -32);
 
-    try testing.expect(list.remove_val(64));
-    try testing.expect(list.remove_val(10) == false);
+    try testing.expect(list.remove_val(64, cmp) == 64);
+    try testing.expect(list.remove_val(10, cmp) == null);
 
     const prn = struct {
         fn prn(a: Allocator, v: i32) ![]u8 {
